@@ -471,6 +471,20 @@ class Loader(FileManagerAware):
         if item.progressbar_supported:
             self.fm.ui.status.request_redraw()
 
+    def cancel_preview_loaders(self):
+        """Remove pending preview CommandLoaders from the queue.
+
+        When scrolling quickly, each file queues a scope.sh subprocess.
+        Only the most recent preview matters, so purge the stale ones.
+        """
+        indices_to_remove = [
+            i for i, item in enumerate(self.queue)
+            if getattr(item, 'description', '').startswith(
+                'Getting preview of ')
+        ]
+        for i in reversed(indices_to_remove):
+            self.remove(index=i)
+
     def has_work(self):
         """Is there anything to load?"""
         return bool(self.queue)

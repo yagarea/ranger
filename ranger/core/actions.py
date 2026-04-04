@@ -1201,6 +1201,13 @@ class Actions(  # pylint: disable=too-many-instance-attributes,too-many-public-m
         )
         loadable.signal_bind('after', on_after)
         loadable.signal_bind('destroy', on_destroy)
+
+        # Remove stale preview loaders from the queue. When scrolling quickly
+        # through images, each file queues a scope.sh subprocess. Without
+        # pruning, hundreds of subprocesses run sequentially even though only
+        # the current file's preview matters.
+        self.loader.cancel_preview_loaders()
+
         self.loader.add(loadable)
 
         return None
