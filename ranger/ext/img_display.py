@@ -449,6 +449,8 @@ _CacheableSixelImage = namedtuple("_CacheableSixelImage", ("width", "height", "i
 
 _CachedSixelImage = namedtuple("_CachedSixelImage", ("image", "fh"))
 
+SIXEL_CACHE_MAX = 64
+
 
 @register_image_displayer("sixel")
 class SixelImageDisplayer(ImageDisplayer, FileManagerAware):
@@ -459,13 +461,24 @@ class SixelImageDisplayer(ImageDisplayer, FileManagerAware):
         self.cache = {}
         self.fm.signal_bind('preview.cleared', lambda signal: self._clear_cache(signal.path))
 
+    @staticmethod
+    def _close_cached_entry(entry):
+        """Close mmap and TemporaryFile handles for a cache entry."""
+        try:
+            entry.image.close()
+        except Exception:  # pylint: disable=broad-except
+            pass
+        try:
+            entry.fh.close()
+        except Exception:  # pylint: disable=broad-except
+            pass
+
     def _clear_cache(self, path):
         if os.path.exists(path):
-            self.cache = {
-                ce: cd
-                for ce, cd in self.cache.items()
-                if ce.inode != os.stat(path).st_ino
-            }
+            inode = os.stat(path).st_ino
+            to_remove = [k for k in self.cache if k.inode == inode]
+            for key in to_remove:
+                self._close_cached_entry(self.cache.pop(key))
 
     def _sixel_cache(self, path, width, height):
         stat = os.stat(path)
@@ -506,7 +519,13 @@ class SixelImageDisplayer(ImageDisplayer, FileManagerAware):
             if os.fstat(cached.fileno()).st_size == 0:
                 raise ImageDisplayError("ImageMagick produced an empty SIXEL image file")
 
-            self.cache[cacheable] = _CachedSixelImage(mmap.mmap(cached.fileno(), 0), cached)
+            self.cache[cacheable] = _CachedSixelImage(
+                mmap.mmap(cached.fileno(), 0), cached)
+
+            # Evict oldest entries to bound file descriptor usage
+            while len(self.cache) > SIXEL_CACHE_MAX:
+                oldest_key = next(iter(self.cache))
+                self._close_cached_entry(self.cache.pop(oldest_key))
 
         return self.cache[cacheable].image
 
@@ -537,6 +556,8 @@ class SixelImageDisplayer(ImageDisplayer, FileManagerAware):
 
     def quit(self):
         self.clear(0, 0, 0, 0)
+        for entry in self.cache.values():
+            self._close_cached_entry(entry)
         self.cache = {}
 
 
