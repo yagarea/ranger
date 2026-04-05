@@ -232,9 +232,9 @@ class StatusBar(Widget):  # pylint: disable=too-many-instance-attributes
         except KeyError:
             try:
                 self.owners[uid] = getpwuid(uid)[0]
-                return self.owners[uid]
             except KeyError:
-                return str(uid)
+                self.owners[uid] = str(uid)
+            return self.owners[uid]
 
     def _get_group(self, target):
         gid = target.stat.st_gid
@@ -244,9 +244,9 @@ class StatusBar(Widget):  # pylint: disable=too-many-instance-attributes
         except KeyError:
             try:
                 self.groups[gid] = getgrgid(gid)[0]
-                return self.groups[gid]
             except KeyError:
-                return str(gid)
+                self.groups[gid] = str(gid)
+            return self.groups[gid]
 
     def _get_right_part(self, bar):  # pylint: disable=too-many-branches,too-many-statements
         right = bar.right
